@@ -1,14 +1,30 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
+
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 INVITE_LINK = os.getenv("INVITE_LINK", "")
 
-PREMIUM_TEXT = (
-    "🔒 دسترسی این ربات فقط برای کاربران Telegram Premium فعال است.\n\n"
-    "ابتدا Telegram Premium خود را فعال کنید، سپس دوباره /start را بزنید."
-)
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_web_server():
+    port = int(os.getenv("PORT", "10000"))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -24,7 +40,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         await update.message.reply_text(
-            PREMIUM_TEXT,
+            "🔒 دسترسی این ربات فقط برای کاربران Telegram Premium فعال است.\n\n"
+            "ابتدا Telegram Premium خود را فعال کنید، سپس دوباره /start را بزنید.",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return
@@ -42,13 +59,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text(
-            text + "\n\nلینک ورود هنوز توسط مدیر تنظیم نشده است."
+            text + "\n\nلینک ورود هنوز تنظیم نشده است."
         )
 
 
 def main():
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN environment variable is missing.")
+
+    threading.Thread(target=start_web_server, daemon=True).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
